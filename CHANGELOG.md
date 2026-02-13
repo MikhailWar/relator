@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-02-13)
+
+### Chores
+
+- Add CodeQL action ([#14](https://github.com/reagento/relator/pull/14),
+  [`997c8ed`](https://github.com/reagento/relator/commit/997c8ed82d22e750c7fcf32c810d6b153bd89ac2))
+
+### Features
+
+- Add discord ([#22](https://github.com/reagento/relator/pull/22),
+  [`9a0ed8f`](https://github.com/reagento/relator/commit/9a0ed8fc1b486f1cd3c785265e552e2925cf3901))
+
+
 ## v1.6.0 (2025-11-05)
 
 ### Chores
