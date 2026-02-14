@@ -5,8 +5,9 @@ import sulguk
 from notifier.application import interfaces
 from notifier.domain.entities import Issue, PullRequest
 from notifier.infrastructure.send_weebhook import send_webhook
+from notifier.infrastructure.truncate_html import TruncateHTML
 
-TG_MESSAGE_LIMIT: typing.Final = 4096
+TG_MESSAGE_LIMIT_DEFAULT: typing.Final = 4096
 
 ISSUE_TEMPLATE: typing.Final = (
     "🚀 <b>New issue to <a href=/{repository}>{repository}</a> by <a href=/{user}>@{user}</a> </b><br/>"
@@ -33,6 +34,7 @@ class TelegramGateway(interfaces.Notifier):
         chat_id: str,
         bot_token: str,
         attempt_count: int,
+        tg_message_limit: int,
         message_thread_id: str | int | None = None,
         custom_template: str = "",
     ) -> None:
@@ -41,6 +43,8 @@ class TelegramGateway(interfaces.Notifier):
         self._attempt_count = attempt_count
         self._message_thread_id = message_thread_id
         self._custom_template = custom_template
+        self._tg_message_limit = tg_message_limit
+
 
     def send_issue(
         self,
@@ -48,14 +52,17 @@ class TelegramGateway(interfaces.Notifier):
         formatted_body: str,
         formatted_labels: str,
     ) -> None:
-        message = self._create_issue_message(issue, formatted_body, formatted_labels)
-        render_result = sulguk.transform_html(message, base_url="https://github.com")
 
-        if len(render_result.text) > TG_MESSAGE_LIMIT:
-            message = self._create_issue_message(issue, "<p></p>", formatted_labels)
-            render_result = sulguk.transform_html(
-                message, base_url="https://github.com"
-            )
+        message = self._create_issue_message(
+            issue=issue,
+            body=formatted_body,
+            labels=formatted_labels
+        )
+        render_result = sulguk.transform_html(
+            message, base_url="https://github.com"
+        )
+
+
         send_webhook(
             payload=self._create_payload(render_result),
             url=f"https://api.telegram.org/bot{self._bot_token}/sendMessage",
@@ -73,12 +80,6 @@ class TelegramGateway(interfaces.Notifier):
         )
         render_result = sulguk.transform_html(message, base_url="https://github.com")
 
-        if len(render_result.text) > TG_MESSAGE_LIMIT:
-            message = self._create_pr_message(pull_request, "<p></p>", formatted_labels)
-            render_result = sulguk.transform_html(
-                message, base_url="https://github.com"
-            )
-
         send_webhook(
             payload=self._create_payload(render_result),
             url=f"https://api.telegram.org/bot{self._bot_token}/sendMessage",
@@ -94,6 +95,7 @@ class TelegramGateway(interfaces.Notifier):
             "entities": render_result.entities,
             "disable_web_page_preview": True,
         }
+
         payload["chat_id"] = self._chat_id
 
         if self._message_thread_id is not None:
@@ -101,9 +103,32 @@ class TelegramGateway(interfaces.Notifier):
 
         return payload
 
+
+    def _create_message_with_limit(
+            self,
+            template: str,
+            payload: dict,
+    ):
+
+        message = template.format(**payload)
+        message_length = len(message)
+        body = payload["body"]
+        truncate_html = TruncateHTML()
+
+        if message_length > self._tg_message_limit:
+            max_length_body = len(body) - (message_length - self._tg_message_limit)
+            payload['body'] = truncate_html.render(
+                raw_html=body,
+                max_length=max_length_body,
+            )
+            return template.format(**payload)
+
+        return message
+
+
     def _create_issue_message(self, issue: Issue, body: str, labels: str) -> str:
         template = self._custom_template or ISSUE_TEMPLATE
-        return template.format(
+        payload = dict(
             id=issue.id,
             user=issue.user,
             title=issue.title,
@@ -111,13 +136,19 @@ class TelegramGateway(interfaces.Notifier):
             url=issue.url,
             body=body,
             repository=issue.repository,
-            promo="<a href='/reagento/relator'>sent via relator</a>",
+            promo="<a href='/reagento/relator'>sent via relator</a>"
+        )
+
+        return self._create_message_with_limit(
+            template=template,
+            payload=payload,
         )
 
     def _create_pr_message(self, pr: PullRequest, body: str, labels: str) -> str:
         """Create HTML message for pull request"""
         template = self._custom_template or PR_TEMPLATE
-        return template.format(
+
+        payload = dict(
             id=pr.id,
             user=pr.user,
             title=pr.title,
@@ -130,4 +161,9 @@ class TelegramGateway(interfaces.Notifier):
             head_ref=pr.head_ref,
             base_ref=pr.base_ref,
             promo="<a href='/reagento/relator'>sent via relator</a>",
+        )
+
+        return self._create_message_with_limit(
+            template=template,
+            payload=payload
         )

@@ -8,7 +8,7 @@ from notifier.application.interfaces import Notifier
 from notifier.application.services import RenderService
 from notifier.infrastructure.discord_gateway import DiscordGateway
 from notifier.infrastructure.github_gateway import GithubGateway
-from notifier.infrastructure.telegram_gateway import TelegramGateway
+from notifier.infrastructure.telegram_gateway import TelegramGateway, TG_MESSAGE_LIMIT_DEFAULT
 
 
 def get_interactor(url: str) -> type[SendIssue] | type[SendPR]:
@@ -55,6 +55,7 @@ if __name__ == "__main__":
             attempt_count=int(os.environ.get("ATTEMPT_COUNT", "2")),
             message_thread_id=os.environ.get("TELEGRAM_MESSAGE_THREAD_ID"),
             custom_template=html_template,
+            tg_message_limit=os.environ.get('TELEGRAM_MESSAGE_LIMIT') or TG_MESSAGE_LIMIT_DEFAULT
         )
         notifiers.append(telegram_gateway)
 
