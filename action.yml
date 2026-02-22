@@ -12,6 +12,9 @@ inputs:
   tg-message-thread-id:
     description: "Telegram Message Thread ID"
     required: false
+  tg-message-limit:
+    description: "Telegram Message Limit"
+    required: false
   discord-webhook-url:
     description: "Discord Webhook URL"
     required: false
@@ -63,6 +66,7 @@ runs:
         TELEGRAM_BOT_TOKEN: ${{ inputs.tg-bot-token }}
         TELEGRAM_CHAT_ID: ${{ inputs.tg-chat-id }}
         TELEGRAM_MESSAGE_THREAD_ID: ${{ inputs.tg-message-thread-id }}
+        TELEGRAM_MESSAGE_LIMIT: ${{ inputs.tg-message-limit }}
         DISCORD_WEBHOOK_URL: ${{ inputs.discord-webhook-url }}
         DISCORD_THREAD_ID: ${{ inputs.discord-thread-id }}
         GITHUB_TOKEN: ${{ inputs.github-token }}

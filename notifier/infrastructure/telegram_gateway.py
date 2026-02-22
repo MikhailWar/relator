@@ -27,20 +27,44 @@ PR_TEMPLATE: typing.Final = (
 )
 
 
+class TelegramMessageContext(interfaces.MessageContext):
+    def __init__(
+        self,
+        build_message: typing.Callable[[typing.Any, str, str], str],
+        entity: typing.Any,
+        labels: str,
+    ) -> None:
+        self._build_message = build_message
+        self._entity = entity
+        self._labels = labels
+
+    def build(self, body: str) -> str:
+        return self._build_message(self._entity, body, self._labels)
+
+    def measure(self, message: str) -> int:
+        render = sulguk.transform_html(message, base_url="https://github.com")
+        return len(render.text)
+
+
 class TelegramGateway(interfaces.Notifier):
     def __init__(
         self,
         chat_id: str,
         bot_token: str,
         attempt_count: int,
+        message_limiter: interfaces.MessageLimiter,
         message_thread_id: str | int | None = None,
         custom_template: str = "",
+        tg_message_limit: int = TG_MESSAGE_LIMIT,
+
     ) -> None:
         self._chat_id = chat_id
         self._bot_token = bot_token
         self._attempt_count = attempt_count
         self._message_thread_id = message_thread_id
         self._custom_template = custom_template
+        self._message_limiter = message_limiter
+        self._tg_message_limit = tg_message_limit
 
     def send_issue(
         self,
@@ -51,8 +75,20 @@ class TelegramGateway(interfaces.Notifier):
         message = self._create_issue_message(issue, formatted_body, formatted_labels)
         render_result = sulguk.transform_html(message, base_url="https://github.com")
 
-        if len(render_result.text) > TG_MESSAGE_LIMIT:
-            message = self._create_issue_message(issue, "<p></p>", formatted_labels)
+        if len(render_result.text) > self._tg_message_limit:
+            context = TelegramMessageContext(
+                build_message=self._create_issue_message,
+                entity=issue,
+                labels=formatted_labels,
+            )
+            truncated_body = self._message_limiter.truncate(
+                context=context,
+                body=formatted_body,
+                limit=self._tg_message_limit,
+            )
+            message = self._create_issue_message(
+                issue, truncated_body, formatted_labels
+            )
             render_result = sulguk.transform_html(
                 message, base_url="https://github.com"
             )
@@ -73,8 +109,20 @@ class TelegramGateway(interfaces.Notifier):
         )
         render_result = sulguk.transform_html(message, base_url="https://github.com")
 
-        if len(render_result.text) > TG_MESSAGE_LIMIT:
-            message = self._create_pr_message(pull_request, "<p></p>", formatted_labels)
+        if len(render_result.text) > self._tg_message_limit:
+            context = TelegramMessageContext(
+                build_message=self._create_pr_message,
+                entity=pull_request,
+                labels=formatted_labels,
+            )
+            truncated_body = self._message_limiter.truncate(
+                context=context,
+                body=formatted_body,
+                limit=self._tg_message_limit,
+            )
+            message = self._create_pr_message(
+                pull_request, truncated_body, formatted_labels
+            )
             render_result = sulguk.transform_html(
                 message, base_url="https://github.com"
             )
@@ -131,3 +179,5 @@ class TelegramGateway(interfaces.Notifier):
             base_ref=pr.base_ref,
             promo="<a href='/reagento/relator'>sent via relator</a>",
         )
+
+
